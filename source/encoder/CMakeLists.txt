@@ -27,6 +27,7 @@ endif(EXTRA_LIB)
 
 add_library(encoder OBJECT ../x265.h
     analysis.cpp analysis.h
+    analysis_ext.cpp analysis_ext.h
     search.cpp search.h
     bitcost.cpp bitcost.h rdcost.h
     motion.cpp motion.h

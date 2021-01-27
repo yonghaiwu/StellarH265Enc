@@ -32,7 +32,7 @@
 #include "picyuv.h"
 #include "md5.h"
 
-#include "analysis.h"
+#include "analysis_ext.h"
 #include "sao.h"
 
 #include "entropy.h"

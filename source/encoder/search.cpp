@@ -2030,7 +2030,7 @@ void Search::PME::processTasks(int workerThreadId)
     ScopedElapsedTime pmeTime(master.m_stats[fe].pmeTime);
 #endif
     ProfileScopeEvent(pme);
-    master.processPME(*this, master.m_tld[workerThreadId].analysis);
+    master.processPME(*this, *master.m_tld[workerThreadId].analysis);
 }
 
 void Search::processPME(PME& pme, Search& slave)

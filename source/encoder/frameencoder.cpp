@@ -294,12 +294,15 @@ void FrameEncoder::threadMain()
             int numTLD = m_pool->m_numWorkers;
             if (!m_param->bEnableWavefront)
                 numTLD += m_pool->m_numProviders;
-
+#if AT_STELLAR_EXT_CLASS
+            m_tld = new ThreadLocalDataExt[numTLD];
+#else
             m_tld = new ThreadLocalData[numTLD];
+#endif
             for (int i = 0; i < numTLD; i++)
             {
-                m_tld[i].analysis.initSearch(*m_param, m_top->m_scalingList);
-                m_tld[i].analysis.create(m_tld);
+                m_tld[i].analysis->initSearch(*m_param, m_top->m_scalingList);
+                m_tld[i].analysis->create(m_tld);
             }
 
             for (int i = 0; i < m_pool->m_numProviders; i++)
@@ -319,9 +322,13 @@ void FrameEncoder::threadMain()
     }
     else
     {
+#if AT_STELLAR_EXT_CLASS
+        m_tld = new ThreadLocalDataExt;
+#else
         m_tld = new ThreadLocalData;
-        m_tld->analysis.initSearch(*m_param, m_top->m_scalingList);
-        m_tld->analysis.create(NULL);
+#endif
+        m_tld->analysis->initSearch(*m_param, m_top->m_scalingList);
+        m_tld->analysis->create(NULL);
         m_localTldIdx = 0;
     }
 
@@ -577,9 +584,9 @@ void FrameEncoder::compressFrame()
         {
             for (int i = 0; i < numTLD; i++)
             {
-                m_tld[i].analysis.m_quant.m_frameNr[m_jpId].offset = m_top->m_offsetEmergency[qp - QP_MAX_SPEC - 1];
-                m_tld[i].analysis.m_quant.m_frameNr[m_jpId].residualSum = m_top->m_residualSumEmergency;
-                m_tld[i].analysis.m_quant.m_frameNr[m_jpId].count = m_top->m_countEmergency;
+                m_tld[i].analysis->m_quant.m_frameNr[m_jpId].offset = m_top->m_offsetEmergency[qp - QP_MAX_SPEC - 1];
+                m_tld[i].analysis->m_quant.m_frameNr[m_jpId].residualSum = m_top->m_residualSumEmergency;
+                m_tld[i].analysis->m_quant.m_frameNr[m_jpId].count = m_top->m_countEmergency;
             }
         }
         else
@@ -588,15 +595,15 @@ void FrameEncoder::compressFrame()
             {
                 for (int i = 0; i < numTLD; i++)
                 {
-                    m_tld[i].analysis.m_quant.m_frameNr[m_jpId].offset = m_tld[i].analysis.m_quant.m_frameNr[m_jpId].nrOffsetDenoise;
-                    m_tld[i].analysis.m_quant.m_frameNr[m_jpId].residualSum = m_tld[i].analysis.m_quant.m_frameNr[m_jpId].nrResidualSum;
-                    m_tld[i].analysis.m_quant.m_frameNr[m_jpId].count = m_tld[i].analysis.m_quant.m_frameNr[m_jpId].nrCount;
+                    m_tld[i].analysis->m_quant.m_frameNr[m_jpId].offset = m_tld[i].analysis->m_quant.m_frameNr[m_jpId].nrOffsetDenoise;
+                    m_tld[i].analysis->m_quant.m_frameNr[m_jpId].residualSum = m_tld[i].analysis->m_quant.m_frameNr[m_jpId].nrResidualSum;
+                    m_tld[i].analysis->m_quant.m_frameNr[m_jpId].count = m_tld[i].analysis->m_quant.m_frameNr[m_jpId].nrCount;
                 }
             }
             else
             {
                 for (int i = 0; i < numTLD; i++)
-                    m_tld[i].analysis.m_quant.m_frameNr[m_jpId].offset = NULL;
+                    m_tld[i].analysis->m_quant.m_frameNr[m_jpId].offset = NULL;
             }
         }
     }
@@ -1131,7 +1138,7 @@ void FrameEncoder::compressFrame()
             /* Accumulate NR statistics from all worker threads */
             for (int i = 0; i < numTLD; i++)
             {
-                NoiseReduction* nr = &m_tld[i].analysis.m_quant.m_frameNr[m_jpId];
+                NoiseReduction* nr = &m_tld[i].analysis->m_quant.m_frameNr[m_jpId];
                 for (int cat = 0; cat < MAX_NUM_TR_CATEGORIES; cat++)
                 {
                     for (int coeff = 0; coeff < MAX_NUM_TR_COEFFS; coeff++)
@@ -1146,7 +1153,7 @@ void FrameEncoder::compressFrame()
             /* Copy updated NR coefficients back to all worker threads */
             for (int i = 0; i < numTLD; i++)
             {
-                NoiseReduction* nr = &m_tld[i].analysis.m_quant.m_frameNr[m_jpId];
+                NoiseReduction* nr = &m_tld[i].analysis->m_quant.m_frameNr[m_jpId];
                 memcpy(nr->nrOffsetDenoise, m_nr->nrOffsetDenoise, sizeof(uint16_t)* MAX_NUM_TR_CATEGORIES * MAX_NUM_TR_COEFFS);
                 memset(nr->nrCount, 0, sizeof(uint32_t)* MAX_NUM_TR_CATEGORIES);
                 memset(nr->nrResidualSum, 0, sizeof(uint32_t)* MAX_NUM_TR_CATEGORIES * MAX_NUM_TR_COEFFS);
@@ -1158,7 +1165,7 @@ void FrameEncoder::compressFrame()
     /* Accumulate CU statistics from each worker thread, we could report
      * per-frame stats here, but currently we do not. */
     for (int i = 0; i < numTLD; i++)
-        m_cuStats.accumulate(m_tld[i].analysis.m_stats[m_jpId], *m_param);
+        m_cuStats.accumulate(m_tld[i].analysis->m_stats[m_jpId], *m_param);
 #endif
 
     m_endFrameTime = x265_mdate();  
@@ -1443,12 +1450,12 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld)
     }
 
     // Initialize restrict on MV range in slices
-    tld.analysis.m_sliceMinY = -(int32_t)(rowInSlice * m_param->maxCUSize * 4) + 3 * 4;
-    tld.analysis.m_sliceMaxY = (int32_t)((endRowInSlicePlus1 - 1 - row) * (m_param->maxCUSize * 4) - 4 * 4);
+    tld.analysis->m_sliceMinY = -(int32_t)(rowInSlice * m_param->maxCUSize * 4) + 3 * 4;
+    tld.analysis->m_sliceMaxY = (int32_t)((endRowInSlicePlus1 - 1 - row) * (m_param->maxCUSize * 4) - 4 * 4);
 
     // Handle single row slice
-    if (tld.analysis.m_sliceMaxY < tld.analysis.m_sliceMinY)
-        tld.analysis.m_sliceMaxY = tld.analysis.m_sliceMinY = 0;
+    if (tld.analysis->m_sliceMaxY < tld.analysis->m_sliceMinY)
+        tld.analysis->m_sliceMaxY = tld.analysis->m_sliceMinY = 0;
 
 
     while (curRow.completed < numCols)
@@ -1516,7 +1523,7 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld)
             ctu->m_vbvAffected = true;
 
         // Does all the CU analysis, returns best top level mode decision
-        Mode& best = tld.analysis.compressCTU(*ctu, *m_frame, m_cuGeoms[m_ctuGeomMap[cuAddr]], rowCoder);
+        Mode& best = tld.analysis->compressCTU(*ctu, *m_frame, m_cuGeoms[m_ctuGeomMap[cuAddr]], rowCoder);
 
         /* startPoint > encodeOrder is true when the start point changes for
         a new GOP but few frames from the previous GOP is still incomplete.
