@@ -35,7 +35,6 @@ extern "C" {
 #pragma warning(disable: 4201) // non-standard extension used (nameless struct/union)
 #endif
 
-#define AT_STELLAR_EXT_CLASS 1
 
 /* x265_encoder:
  *      opaque handler for encoder */
@@ -754,6 +753,12 @@ static const x265_vmaf_commondata vcd[] = { { NULL, (char *)"/usr/local/share/mo
  * x265_param as an opaque data structure */
 typedef struct x265_param
 {
+    /* Enable stellar algorithm for encoding, it may include a set of parameters 
+     * later for each detailed sub-field, for example prameters to control  intra 
+     * pred, motion estimation, mode decision, rdo, etc.
+    */
+    int bEnableStellarAlgorithm; // top level control parameter of all stellar algorithms
+
     /* x265_param_default() will auto-detect this cpu capability bitmap.  it is
      * recommended to not change this value unless you know the cpu detection is
      * somehow flawed on your target hardware. The asm function tables are

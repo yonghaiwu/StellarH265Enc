@@ -294,11 +294,11 @@ void FrameEncoder::threadMain()
             int numTLD = m_pool->m_numWorkers;
             if (!m_param->bEnableWavefront)
                 numTLD += m_pool->m_numProviders;
-#if AT_STELLAR_EXT_CLASS
-            m_tld = new ThreadLocalDataExt[numTLD];
-#else
-            m_tld = new ThreadLocalData[numTLD];
-#endif
+            if(m_param->bEnableStellarAlgorithm)
+                m_tld = new ThreadLocalDataExt[numTLD];
+            else
+                m_tld = new ThreadLocalData[numTLD];
+
             for (int i = 0; i < numTLD; i++)
             {
                 m_tld[i].analysis->initSearch(*m_param, m_top->m_scalingList);
@@ -322,11 +322,11 @@ void FrameEncoder::threadMain()
     }
     else
     {
-#if AT_STELLAR_EXT_CLASS
-        m_tld = new ThreadLocalDataExt;
-#else
-        m_tld = new ThreadLocalData;
-#endif
+        if (m_param->bEnableStellarAlgorithm)
+            m_tld = new ThreadLocalDataExt;
+        else
+            m_tld = new ThreadLocalData;
+
         m_tld->analysis->initSearch(*m_param, m_top->m_scalingList);
         m_tld->analysis->create(NULL);
         m_localTldIdx = 0;

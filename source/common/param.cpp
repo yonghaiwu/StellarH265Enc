@@ -129,6 +129,9 @@ void x265_param_default(x265_param* param)
     param->bLogCuStats = 0;
     param->decodedPictureHashSEI = 0;
 
+    /* Stellar algorithm control parameters */
+    param->bEnableStellarAlgorithm = 1;
+
     /* Quality Measurement Metrics */
     param->bEnablePsnr = 0;
     param->bEnableSsim = 0;
