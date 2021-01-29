@@ -34,7 +34,7 @@
 #include "cudata.h"
 
 #include "entropy.h"
-#include "search.h"
+#include "search_ext.h"
 
 namespace X265_NS {
 // private namespace
@@ -56,7 +56,7 @@ struct SplitData
     }
 };
 
-class Analysis : public Search
+class Analysis : public SearchExt
 {
 public:
 

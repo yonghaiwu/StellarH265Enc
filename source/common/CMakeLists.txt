@@ -166,6 +166,7 @@ add_library(common OBJECT
     lowres.cpp lowres.h mv.h 
     piclist.cpp piclist.h
     predict.cpp  predict.h
+    predict_ext.cpp  predict_ext.h
     scalinglist.cpp scalinglist.h
     quant.cpp quant.h contexts.h
     deblock.cpp deblock.h

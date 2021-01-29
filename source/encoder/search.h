@@ -26,7 +26,7 @@
 #define X265_SEARCH_H
 
 #include "common.h"
-#include "predict.h"
+#include "predict_ext.h"
 #include "quant.h"
 #include "bitcost.h"
 #include "framedata.h"
@@ -248,7 +248,7 @@ inline int getTUBits(int idx, int numIdx)
     return idx + (idx < numIdx - 1);
 }
 
-class Search : public Predict
+class Search : public PredictExt
 {
 public:
 
@@ -292,42 +292,42 @@ public:
 #endif
 
     Search();
-    ~Search();
+    virtual ~Search();
 
-    bool     initSearch(const x265_param& param, ScalingList& scalingList);
-    int      setLambdaFromQP(const CUData& ctu, int qp, int lambdaQP = -1); /* returns real quant QP in valid spec range */
+    virtual bool     initSearch(const x265_param& param, ScalingList& scalingList);
+    virtual int      setLambdaFromQP(const CUData& ctu, int qp, int lambdaQP = -1); /* returns real quant QP in valid spec range */
 
     // mark temp RD entropy contexts as uninitialized; useful for finding loads without stores
-    void     invalidateContexts(int fromDepth);
+    virtual void     invalidateContexts(int fromDepth);
 
     // full RD search of intra modes
-    void     checkIntra(Mode& intraMode, const CUGeom& cuGeom, PartSize partSizes);
+    virtual void     checkIntra(Mode& intraMode, const CUGeom& cuGeom, PartSize partSizes);
 
     // select best intra mode using only sa8d costs, cannot measure NxN intra
-    void     checkIntraInInter(Mode& intraMode, const CUGeom& cuGeom);
+    virtual void     checkIntraInInter(Mode& intraMode, const CUGeom& cuGeom);
     // encode luma mode selected by checkIntraInInter, then pick and encode a chroma mode
-    void     encodeIntraInInter(Mode& intraMode, const CUGeom& cuGeom);
+    virtual void     encodeIntraInInter(Mode& intraMode, const CUGeom& cuGeom);
 
     // estimation inter prediction (non-skip)
-    void     predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChromaMC, uint32_t masks[2]);
-    void     searchMV(Mode& interMode, int list, int ref, MV& outmv, MV mvp[3], int numMvc, MV* mvc);
+    virtual void     predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChromaMC, uint32_t masks[2]);
+    virtual void     searchMV(Mode& interMode, int list, int ref, MV& outmv, MV mvp[3], int numMvc, MV* mvc);
     // encode residual and compute rd-cost for inter mode
-    void     encodeResAndCalcRdInterCU(Mode& interMode, const CUGeom& cuGeom);
-    void     encodeResAndCalcRdSkipCU(Mode& interMode);
+    virtual void     encodeResAndCalcRdInterCU(Mode& interMode, const CUGeom& cuGeom);
+    virtual void     encodeResAndCalcRdSkipCU(Mode& interMode);
 
     // encode residual without rd-cost
-    void     residualTransformQuantInter(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t tuDepth, const uint32_t depthRange[2]);
-    void     residualTransformQuantIntra(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t tuDepth, const uint32_t depthRange[2]);
-    void     residualQTIntraChroma(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t tuDepth);
+    virtual void     residualTransformQuantInter(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t tuDepth, const uint32_t depthRange[2]);
+    virtual void     residualTransformQuantIntra(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t tuDepth, const uint32_t depthRange[2]);
+    virtual void     residualQTIntraChroma(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t tuDepth);
 
     // pick be chroma mode from available using just sa8d costs
-    void     getBestIntraModeChroma(Mode& intraMode, const CUGeom& cuGeom);
+    virtual void     getBestIntraModeChroma(Mode& intraMode, const CUGeom& cuGeom);
 
     /* update CBF flags and QP values to be internally consistent */
-    void checkDQP(Mode& mode, const CUGeom& cuGeom);
-    void checkDQPForSplitPred(Mode& mode, const CUGeom& cuGeom);
+    virtual void checkDQP(Mode& mode, const CUGeom& cuGeom);
+    virtual void checkDQPForSplitPred(Mode& mode, const CUGeom& cuGeom);
 
-    MV getLowresMV(const CUData& cu, const PredictionUnit& pu, int list, int ref);
+    virtual MV getLowresMV(const CUData& cu, const PredictionUnit& pu, int list, int ref);
 
     class PME : public BondedTaskGroup
     {
@@ -353,10 +353,8 @@ public:
         PME operator=(const PME&);
     };
 
-    void     processPME(PME& pme, Search& slave);
-    void     singleMotionEstimation(Search& master, Mode& interMode, const PredictionUnit& pu, int part, int list, int ref);
-
-protected:
+    virtual void     processPME(PME& pme, Search& slave);
+    virtual void     singleMotionEstimation(Search& master, Mode& interMode, const PredictionUnit& pu, int part, int list, int ref);
 
     /* motion estimation distribution */
     ThreadLocalData* m_tld;
@@ -364,17 +362,19 @@ protected:
     uint32_t      m_listSelBits[3];
     Lock          m_meLock;
 
-    void     saveResidualQTData(CUData& cu, ShortYuv& resiYuv, uint32_t absPartIdx, uint32_t tuDepth);
+protected:
+
+    virtual void     saveResidualQTData(CUData& cu, ShortYuv& resiYuv, uint32_t absPartIdx, uint32_t tuDepth);
 
     // RDO search of luma intra modes; result is fully encoded luma. luma distortion is returned
-    sse_t estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uint32_t depthRange[2]);
+    virtual sse_t estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uint32_t depthRange[2]);
 
     // RDO select best chroma mode from luma; result is fully encode chroma. chroma distortion is returned
-    sse_t estIntraPredChromaQT(Mode &intraMode, const CUGeom& cuGeom);
+    virtual sse_t estIntraPredChromaQT(Mode &intraMode, const CUGeom& cuGeom);
 
-    void     codeSubdivCbfQTChroma(const CUData& cu, uint32_t tuDepth, uint32_t absPartIdx);
-    void     codeInterSubdivCbfQT(CUData& cu, uint32_t absPartIdx, const uint32_t tuDepth, const uint32_t depthRange[2]);
-    void     codeCoeffQTChroma(const CUData& cu, uint32_t tuDepth, uint32_t absPartIdx, TextType ttype);
+    virtual void     codeSubdivCbfQTChroma(const CUData& cu, uint32_t tuDepth, uint32_t absPartIdx);
+    virtual void     codeInterSubdivCbfQT(CUData& cu, uint32_t absPartIdx, const uint32_t tuDepth, const uint32_t depthRange[2]);
+    virtual void     codeCoeffQTChroma(const CUData& cu, uint32_t tuDepth, uint32_t absPartIdx, TextType ttype);
 
     struct Cost
     {
@@ -393,22 +393,22 @@ protected:
         Entropy rqtStore[NUM_SUBPART];
     } m_cacheTU;
 
-    uint64_t estimateNullCbfCost(sse_t dist, uint32_t energy, uint32_t tuDepth, TextType compId);
-    bool     splitTU(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t tuDepth, ShortYuv& resiYuv, Cost& splitCost, const uint32_t depthRange[2], int32_t splitMore);
-    void     estimateResidualQT(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t depth, ShortYuv& resiYuv, Cost& costs, const uint32_t depthRange[2], int32_t splitMore = -1);
+    virtual uint64_t estimateNullCbfCost(sse_t dist, uint32_t energy, uint32_t tuDepth, TextType compId);
+    virtual bool     splitTU(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t tuDepth, ShortYuv& resiYuv, Cost& splitCost, const uint32_t depthRange[2], int32_t splitMore);
+    virtual void     estimateResidualQT(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t depth, ShortYuv& resiYuv, Cost& costs, const uint32_t depthRange[2], int32_t splitMore = -1);
 
     // generate prediction, generate residual and recon. if bAllowSplit, find optimal RQT splits
-    void     codeIntraLumaQT(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t absPartIdx, bool bAllowSplit, Cost& costs, const uint32_t depthRange[2]);
-    void     codeIntraLumaTSkip(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t absPartIdx, Cost& costs);
-    void     extractIntraResultQT(CUData& cu, Yuv& reconYuv, uint32_t tuDepth, uint32_t absPartIdx);
+    virtual void     codeIntraLumaQT(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t absPartIdx, bool bAllowSplit, Cost& costs, const uint32_t depthRange[2]);
+    virtual void     codeIntraLumaTSkip(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t absPartIdx, Cost& costs);
+    virtual void     extractIntraResultQT(CUData& cu, Yuv& reconYuv, uint32_t tuDepth, uint32_t absPartIdx);
 
     // generate chroma prediction, generate residual and recon
-    void     codeIntraChromaQt(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t absPartIdx, Cost& outCost);
-    void     codeIntraChromaTSkip(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t tuDepthC, uint32_t absPartIdx, Cost& outCost);
-    void     extractIntraResultChromaQT(CUData& cu, Yuv& reconYuv, uint32_t absPartIdx, uint32_t tuDepth);
+    virtual void     codeIntraChromaQt(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t absPartIdx, Cost& outCost);
+    virtual void     codeIntraChromaTSkip(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t tuDepthC, uint32_t absPartIdx, Cost& outCost);
+    virtual void     extractIntraResultChromaQT(CUData& cu, Yuv& reconYuv, uint32_t absPartIdx, uint32_t tuDepth);
 
     // reshuffle CBF flags after coding a pair of 4:2:2 chroma blocks
-    void     offsetSubTUCBFs(CUData& cu, TextType ttype, uint32_t tuDepth, uint32_t absPartIdx);
+    virtual void     offsetSubTUCBFs(CUData& cu, TextType ttype, uint32_t tuDepth, uint32_t absPartIdx);
 
     /* output of mergeEstimation, best merge candidate */
     struct MergeData
@@ -420,23 +420,23 @@ protected:
     };
 
     /* inter/ME helper functions */
-    int       selectMVP(const CUData& cu, const PredictionUnit& pu, const MV amvp[AMVP_NUM_CANDS], int list, int ref);
-    const MV& checkBestMVP(const MV amvpCand[2], const MV& mv, int& mvpIdx, uint32_t& outBits, uint32_t& outCost) const;
-    void     setSearchRange(const CUData& cu, const MV& mvp, int merange, MV& mvmin, MV& mvmax) const;
-    uint32_t mergeEstimation(CUData& cu, const CUGeom& cuGeom, const PredictionUnit& pu, int puIdx, MergeData& m);
-    static void getBlkBits(PartSize cuMode, bool bPSlice, int puIdx, uint32_t lastMode, uint32_t blockBit[3]);
-    void      updateMVP(const MV amvp, const MV& mv, uint32_t& outBits, uint32_t& outCost, const MV& alterMVP);
+    virtual int       selectMVP(const CUData& cu, const PredictionUnit& pu, const MV amvp[AMVP_NUM_CANDS], int list, int ref);
+    virtual const MV& checkBestMVP(const MV amvpCand[2], const MV& mv, int& mvpIdx, uint32_t& outBits, uint32_t& outCost) const;
+    virtual void     setSearchRange(const CUData& cu, const MV& mvp, int merange, MV& mvmin, MV& mvmax) const;
+    virtual uint32_t mergeEstimation(CUData& cu, const CUGeom& cuGeom, const PredictionUnit& pu, int puIdx, MergeData& m);
+    virtual void getBlkBits(PartSize cuMode, bool bPSlice, int puIdx, uint32_t lastMode, uint32_t blockBit[3]);
+    virtual void      updateMVP(const MV amvp, const MV& mv, uint32_t& outBits, uint32_t& outCost, const MV& alterMVP);
 
     /* intra helper functions */
     enum { MAX_RD_INTRA_MODES = 16 };
-    static void updateCandList(uint32_t mode, uint64_t cost, int maxCandCount, uint32_t* candModeList, uint64_t* candCostList);
+    virtual void updateCandList(uint32_t mode, uint64_t cost, int maxCandCount, uint32_t* candModeList, uint64_t* candCostList);
 
     // get most probable luma modes for CU part, and bit cost of all non mpm modes
-    uint32_t getIntraRemModeBits(CUData & cu, uint32_t absPartIdx, uint32_t mpmModes[3], uint64_t& mpms) const;
+    virtual uint32_t getIntraRemModeBits(CUData & cu, uint32_t absPartIdx, uint32_t mpmModes[3], uint64_t& mpms) const;
 
-    void updateModeCost(Mode& m) const { m.rdCost = m_rdCost.m_psyRd ? m_rdCost.calcPsyRdCost(m.distortion, m.totalBits, m.psyEnergy)
-                                                : (m_rdCost.m_ssimRd ? m_rdCost.calcSsimRdCost(m.distortion, m.totalBits, m.ssimEnergy) 
-                                                : m_rdCost.calcRdCost(m.distortion, m.totalBits)); }
+    virtual void updateModeCost(Mode& m) const { m.rdCost = m_rdCost.m_psyRd ? m_rdCost.calcPsyRdCost(m.distortion, m.totalBits, m.psyEnergy)
+                                                    : (m_rdCost.m_ssimRd ? m_rdCost.calcSsimRdCost(m.distortion, m.totalBits, m.ssimEnergy) 
+                                                    : m_rdCost.calcRdCost(m.distortion, m.totalBits)); }
 };
 }
 
