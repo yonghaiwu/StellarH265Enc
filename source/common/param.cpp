@@ -131,6 +131,9 @@ void x265_param_default(x265_param* param)
 
     /* Stellar algorithm control parameters */
     param->bEnableStellarAlgorithm = 1;
+    param->bEnableIntraNxN = 0;
+    param->intraSyncSize = 32;
+    param->bEnableCu64 = 1;
 
     /* Quality Measurement Metrics */
     param->bEnablePsnr = 0;
@@ -886,6 +889,11 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
             }
         }
     }
+    OPT("stellar-alg") p->bEnableStellarAlgorithm = atobool(value);
+    OPT("intra-nxn") p->bEnableIntraNxN = atobool(value);
+    OPT("intra-sync-size") p->intraSyncSize = atoi(value);
+    OPT("cu64") p->bEnableCu64 = atobool(value);
+
     OPT("frame-threads") p->frameNumThreads = atoi(value);
     OPT("pmode") p->bDistributeModeAnalysis = atobool(value);
     OPT("pme") p->bDistributeMotionEstimation = atobool(value);
@@ -1839,6 +1847,9 @@ int x265_check_params(x265_param* param)
             x265_log(param, X265_LOG_WARNING, "Live VBV enabled without VBV settings.Disabling live VBV in 2 pass\n");
         }
     }
+
+    CHECK(param->intraSyncSize != 8 && param->intraSyncSize != 16 && param->intraSyncSize != 32,
+          "Intra sync size must be 8 or 16 or 32");
     return check_failed;
 }
 
@@ -2341,6 +2352,11 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->frameNumThreads = src->frameNumThreads;
     if (src->numaPools) dst->numaPools = strdup(src->numaPools);
     else dst->numaPools = NULL;
+
+    dst->bEnableStellarAlgorithm = src->bEnableStellarAlgorithm;
+    dst->bEnableIntraNxN = src->bEnableIntraNxN;
+    dst->intraSyncSize = src->intraSyncSize;
+    dst->bEnableCu64 = src->bEnableCu64;
 
     dst->bEnableWavefront = src->bEnableWavefront;
     dst->bDistributeModeAnalysis = src->bDistributeModeAnalysis;

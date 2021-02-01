@@ -758,6 +758,17 @@ typedef struct x265_param
      * pred, motion estimation, mode decision, rdo, etc.
     */
     int bEnableStellarAlgorithm; // top level control parameter of all stellar algorithms
+    int bEnableIntraNxN; // enable Intra NxN mode prediction, for 8x8 CU, it can be splitted into four 4x4 PU
+    
+    /* The size of CU to be processed in parallel in HW, which means its neighbor
+     * may not be available because the neighbor CU is being processed simultaneously.
+     * And after the whole unit is finished, we'll do real intra prediction using correct
+     * neighbor (reconstructed pixels) and do following steps (transform, quant, etc) to
+     * get reconstructed block and coefficients for entropy.
+       8 for 8x8, 16 for 16x16, 32 for 32x32, other values are prohibited, default is 32 */
+    int intraSyncSize;
+
+    int bEnableCu64; // enable or disable 64x64 CU coding, effective only when CTU is 64x64
 
     /* x265_param_default() will auto-detect this cpu capability bitmap.  it is
      * recommended to not change this value unless you know the cpu detection is
