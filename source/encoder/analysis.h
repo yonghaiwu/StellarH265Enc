@@ -55,8 +55,11 @@ struct SplitData
         sa8dCost  = 0;
     }
 };
-
+#if STELLAR_ALG_EN
 class Analysis : public SearchExt
+#else
+class Analysis : public Search
+#endif
 {
 public:
 

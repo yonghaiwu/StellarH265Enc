@@ -84,9 +84,11 @@ bool Search::initSearch(const x265_param& param, ScalingList& scalingList)
     bool ok = m_quant.init(param.psyRdoq, scalingList, m_entropyCoder);
     if (m_param->noiseReductionIntra || m_param->noiseReductionInter )
         ok &= m_quant.allocNoiseReduction(param);
-
+#if STELLAR_ALG_EN
     ok &= PredictExt::allocBuffers(param.internalCsp); /* sets m_hChromaShift & m_vChromaShift */
-
+#else
+    ok &= Predict::allocBuffers(param.internalCsp); /* sets m_hChromaShift & m_vChromaShift */
+#endif
     /* When frame parallelism is active, only 'refLagPixels' of reference frames will be guaranteed
      * available for motion reference.  See refLagRows in FrameEncoder::compressCTURows() */
     m_refLagPixels = m_bFrameParallel ? param.searchRange : param.sourceHeight;
@@ -1735,7 +1737,11 @@ void Search::getBestIntraModeChroma(Mode& intraMode, const CUGeom& cuGeom)
         {
             const pixel* fenc = fencYuv->m_buf[chromaId];
             pixel* pred = predYuv->m_buf[chromaId];
+#if STELLAR_ALG_EN
             PredictExt::initAdiPatternChroma(cu, cuGeom, 0, intraNeighbors, chromaId);
+#else 
+            Predict::initAdiPatternChroma(cu, cuGeom, 0, intraNeighbors, chromaId);
+#endif
             // get prediction signal
             predIntraChromaAng(chromaPredMode, pred, fencYuv->m_csize, log2TrSizeC);
             cost += primitives.cu[log2TrSizeC - 2].sa8d(fenc, predYuv->m_csize, pred, fencYuv->m_csize) << costShift;

@@ -130,10 +130,10 @@ void x265_param_default(x265_param* param)
     param->decodedPictureHashSEI = 0;
 
     /* Stellar algorithm control parameters */
-    param->bEnableStellarAlgorithm = 1;
     param->bEnableIntraNxN = 0;
     param->intraSyncSize = 32;
     param->bEnableCu64 = 1;
+    param->bEnableIntraRdo = 0;
 
     /* Quality Measurement Metrics */
     param->bEnablePsnr = 0;
@@ -889,11 +889,6 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
             }
         }
     }
-    OPT("stellar-alg") p->bEnableStellarAlgorithm = atobool(value);
-    OPT("intra-nxn") p->bEnableIntraNxN = atobool(value);
-    OPT("intra-sync-size") p->intraSyncSize = atoi(value);
-    OPT("cu64") p->bEnableCu64 = atobool(value);
-
     OPT("frame-threads") p->frameNumThreads = atoi(value);
     OPT("pmode") p->bDistributeModeAnalysis = atobool(value);
     OPT("pme") p->bDistributeMotionEstimation = atobool(value);
@@ -1211,6 +1206,11 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
     if (bExtraParams)
     {
         if (0) ;
+        OPT("intra-nxn") p->bEnableIntraNxN = atobool(value);
+        OPT("intra-sync-size") p->intraSyncSize = atoi(value);
+        OPT("cu64") p->bEnableCu64 = atobool(value);
+        OPT("intra-rdo") p->bEnableIntraRdo = atobool(value);
+
         OPT("csv") p->csvfn = strdup(value);
         OPT("csv-log-level") p->csvLogLevel = atoi(value);
         OPT("qpmin") p->rc.qpMin = atoi(value);
@@ -1848,7 +1848,7 @@ int x265_check_params(x265_param* param)
         }
     }
 
-    CHECK(param->intraSyncSize != 8 && param->intraSyncSize != 16 && param->intraSyncSize != 32,
+    CHECK(param->intraSyncSize != 0 && param->intraSyncSize != 8 && param->intraSyncSize != 16 && param->intraSyncSize != 32,
           "Intra sync size must be 8 or 16 or 32");
     return check_failed;
 }
@@ -2018,6 +2018,9 @@ void x265_print_params(x265_param* param)
     TOOLOPT(param->toneMapFile != NULL, "dhdr10-info");
 #endif
     x265_log(param, X265_LOG_INFO, "tools:%s\n", buf);
+
+    x265_log(param, X265_LOG_INFO, "Stellar algorithm: Intra NxN=%d, Intra sync size=%d, Enable CU 64x64=%d, Enable intra RDO=%d\n", 
+             param->bEnableIntraNxN, param->intraSyncSize, param->bEnableCu64, param->bEnableIntraRdo);
     fflush(stderr);
 }
 
@@ -2353,10 +2356,10 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     if (src->numaPools) dst->numaPools = strdup(src->numaPools);
     else dst->numaPools = NULL;
 
-    dst->bEnableStellarAlgorithm = src->bEnableStellarAlgorithm;
     dst->bEnableIntraNxN = src->bEnableIntraNxN;
     dst->intraSyncSize = src->intraSyncSize;
     dst->bEnableCu64 = src->bEnableCu64;
+    dst->bEnableIntraRdo = src->bEnableIntraRdo;
 
     dst->bEnableWavefront = src->bEnableWavefront;
     dst->bDistributeModeAnalysis = src->bDistributeModeAnalysis;

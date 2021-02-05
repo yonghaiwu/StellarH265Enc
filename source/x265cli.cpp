@@ -120,11 +120,10 @@ namespace X265_NS {
         H0("   --limit-tu <0..4>             Enable early exit from TU recursion for inter coded blocks. Default %d\n", param->limitTU);
         H0("\nAnalysis:\n");
 
-        H0("   --[no-]stellar-alg            Enable stellar algorithm for encoding. Default %d\n", param->bEnableStellarAlgorithm);
         H0("   --[no-]intra-nxn              Enable intra NxN mode prediction for encoding. Default %d\n", param->bEnableIntraNxN);
         H0("   --intra-sync-size             Block size for using real neighbor in intra prediction. Default %d\n", param->intraSyncSize);
         H0("   --[no-]cu64                   Enable 64x64 CU prediction for encoding. Default %d\n", param->bEnableCu64);
-
+        H0("   --[no-]intra-rdo              Enable RDO for intra mode decision. Default %d\n", param->bEnableIntraRdo);
         H0("   --rd <1..6>                   Level of RDO in mode decision 1:least....6:full RDO. Default %d\n", param->rdLevel);
         H0("   --[no-]psy-rd <0..5.0>        Strength of psycho-visual rate distortion optimization, 0 to disable. Default %.1f\n", param->psyRd);
         H0("   --[no-]rdoq-level <0|1|2>     Level of RDO in quantization 0:none, 1:levels, 2:levels & coding groups. Default %d\n", param->rdoqLevel);

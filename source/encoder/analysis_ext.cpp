@@ -72,14 +72,14 @@ using namespace X265_NS;
 
 AnalysisExt::AnalysisExt()
 {
-    m_reuseInterDataCTU = NULL;
-    m_reuseRef = NULL;
-    m_bHD = false;
-    m_modeFlag[0] = false;
-    m_modeFlag[1] = false;
-    m_checkMergeAndSkipOnly[0] = false;
-    m_checkMergeAndSkipOnly[1] = false;
-    m_evaluateInter = 0;
+    //m_reuseInterDataCTU = NULL;
+    //m_reuseRef = NULL;
+    //m_bHD = false;
+    //m_modeFlag[0] = false;
+    //m_modeFlag[1] = false;
+    //m_checkMergeAndSkipOnly[0] = false;
+    //m_checkMergeAndSkipOnly[1] = false;
+    //m_evaluateInter = 0;
 }
 
 bool AnalysisExt::create(ThreadLocalData *tld)
@@ -139,6 +139,9 @@ Mode& AnalysisExt::compressCTU(CUData& ctu, Frame& frame, const CUGeom& cuGeom, 
 {
     m_slice = ctu.m_slice;
     m_frame = &frame;
+#if STELLAR_ALG_EN
+    PredictExt::setFrame(m_frame);
+#endif
     m_bChromaSa8d = m_param->rdLevel >= 3;
     m_param = m_frame->m_param;
 
@@ -662,9 +665,20 @@ uint64_t AnalysisExt::compressIntraCU(const CUData& parentCTU, const CUGeom& cuG
 
     /* Copy best data to encData CTU and recon */
     md.bestMode->cu.copyToPic(depth);
-    if (md.bestMode != &md.pred[PRED_SPLIT])
-        md.bestMode->reconYuv.copyToPicYuv(*m_frame->m_reconPic, parentCTU.m_cuAddr, cuGeom.absPartIdx);
-
+    if (m_param->bEnableIntraRdo)
+    {
+        if (md.bestMode != &md.pred[PRED_SPLIT])
+            md.bestMode->reconYuv.copyToPicYuv(*m_frame->m_reconPic, parentCTU.m_cuAddr, cuGeom.absPartIdx);
+    }
+    else
+    {
+        if (cuGeom.depth == 0)
+            encodeResidue(parentCTU, cuGeom);
+        //if ((1 << cuGeom.log2CUSize) >= m_param->intraSyncSize)
+        //{
+        //    encodeIntraSyncSizeResidue(cuGeom, parentCTU, 0);
+        //}
+    }
     return md.bestMode->rdCost;
 }
 
@@ -3299,6 +3313,7 @@ void AnalysisExt::encodeResidue(const CUData& ctu, const CUGeom& cuGeom)
 
     cu.copyFromPic(ctu, cuGeom, m_csp);
 
+    setLambdaFromQP(ctu, cu.m_qp[0]);
     PicYuv& reconPic = *m_frame->m_reconPic;
 
     Yuv& fencYuv = m_modeDepth[cuGeom.depth].fencYuv;
@@ -3401,6 +3416,36 @@ void AnalysisExt::encodeResidue(const CUData& ctu, const CUGeom& cuGeom)
     }
 
     cu.updatePic(cuGeom.depth, m_frame->m_fencPic->m_picCsp);
+}
+
+void AnalysisExt::encodeIntraSyncSizeResidue(const CUGeom& cuGeom, const CUData& parentCTU, uint32_t absPartIdx)
+{
+    /* reuse the bestMode data structures at the current depth */
+    Mode* bestMode = m_modeDepth[cuGeom.depth].bestMode;
+    CUData& cu = bestMode->cu;
+    cu.copyFromPic(parentCTU, cuGeom, m_csp, true);
+
+    if (cuGeom.depth < cu.m_cuDepth[0])
+    {
+        X265_CHECK(cuGeom.depth < cu.m_encData->m_param->maxCUDepth, "current CU depth is too big");
+        for (uint32_t subPartIdx = 0; subPartIdx < 4; subPartIdx++)
+        {
+            const CUGeom& childGeom = *(&cuGeom + cuGeom.childOffset + subPartIdx);
+            if (childGeom.flags & CUGeom::PRESENT)
+                encodeIntraSyncSizeResidue(childGeom, parentCTU, subPartIdx);
+        }
+        return;
+    }
+
+    uint32_t tuDepthRange[2];
+    cu.getIntraTUQtDepthRange(tuDepthRange, 0);
+
+    residualTransformQuantIntra(*bestMode, cuGeom, 0, 0, tuDepthRange);
+    if (m_csp != X265_CSP_I400 && m_frame->m_fencPic->m_picCsp != X265_CSP_I400)
+    {
+        //getBestIntraModeChroma(*bestMode, cuGeom);
+        residualQTIntraChroma(*bestMode, cuGeom, 0, 0);
+    }
 }
 
 void AnalysisExt::addSplitFlagCost(Mode& mode, uint32_t depth)

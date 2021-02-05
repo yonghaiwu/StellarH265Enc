@@ -372,6 +372,15 @@ static const struct option long_options[] =
     { "svt-fps-in-vps",  no_argument  , NULL, 0 },
     { "no-svt-fps-in-vps",  no_argument  , NULL, 0 },
 #endif
+#if STELLAR_ALG_EN
+    { "intra-nxn", no_argument, 0 },
+    { "no-intra-nxn", no_argument, 0},
+    { "intra-sync-size", required_argument, 0 },
+    { "cu64", no_argument, 0},
+    { "no-cu64", no_argument, 0},
+    {"intra-rdo", no_argument, NULL, 0},
+    { "no-intra-rdo", no_argument, NULL, 0 },
+#endif
     { "cll", no_argument, NULL, 0 },
     { "no-cll", no_argument, NULL, 0 },
     { "hme-range", required_argument, NULL, 0 },

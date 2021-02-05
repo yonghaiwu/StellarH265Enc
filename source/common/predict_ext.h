@@ -72,6 +72,7 @@ public:
 
     //// Unfiltered/filtered neighbours of the current partition.
     //pixel     intraNeighbourBuf[2][258];
+    pixel     intraOrigNeighbourBuf[2][258]; // original neighbour pixel 
 
     ///* Slice information */
     //int       m_csp;
@@ -83,6 +84,7 @@ public:
 
     bool allocBuffers(int csp);
 
+    void setFrame(Frame* f) { m_frame = f; }
     // motion compensation functions
     void predInterLumaPixel(const PredictionUnit& pu, Yuv& dstYuv, const PicYuv& refPic, const MV& mv) const;
     void predInterChromaPixel(const PredictionUnit& pu, Yuv& dstYuv, const PicYuv& refPic, const MV& mv) const;
@@ -100,6 +102,9 @@ public:
     void predIntraChromaAng(uint32_t dirMode, pixel* pred, intptr_t stride, uint32_t log2TrSizeC);
     void initAdiPattern(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, int dirMode);
     void initAdiPatternChroma(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, uint32_t chromaId);
+    void initAdiPatternOrigNeigh(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, int dirMode);
+    void initAdiPatternChromaOrigNeigh(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, uint32_t chromaId);
+    void generateNeighCombineRecAndOrig(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, const int intraSyncSize);
 
     /* Intra prediction helper functions */
     void initIntraNeighbors(const CUData& cu, uint32_t absPartIdx, uint32_t tuDepth, bool isLuma, IntraNeighbors *IntraNeighbors);
@@ -114,6 +119,8 @@ public:
     static int  isAboveRightAvailable(const CUData& cu, uint32_t partIdxRT, bool* bValidFlags, uint32_t numUnits);
     template<bool cip>
     static int  isBelowLeftAvailable(const CUData& cu, uint32_t partIdxLB, bool* bValidFlags, uint32_t numUnits);*/
+private:
+    Frame* m_frame;
 };
 }
 

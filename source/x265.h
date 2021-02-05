@@ -35,7 +35,7 @@ extern "C" {
 #pragma warning(disable: 4201) // non-standard extension used (nameless struct/union)
 #endif
 
-
+#define STELLAR_ALG_EN  1
 /* x265_encoder:
  *      opaque handler for encoder */
 typedef struct x265_encoder x265_encoder;
@@ -753,12 +753,8 @@ static const x265_vmaf_commondata vcd[] = { { NULL, (char *)"/usr/local/share/mo
  * x265_param as an opaque data structure */
 typedef struct x265_param
 {
-    /* Enable stellar algorithm for encoding, it may include a set of parameters 
-     * later for each detailed sub-field, for example prameters to control  intra 
-     * pred, motion estimation, mode decision, rdo, etc.
-    */
-    int bEnableStellarAlgorithm; // top level control parameter of all stellar algorithms
-    int bEnableIntraNxN; // enable Intra NxN mode prediction, for 8x8 CU, it can be splitted into four 4x4 PU
+    /* enable Intra NxN mode prediction, for 8x8 CU, it can be splitted into four 4x4 PU */
+    int bEnableIntraNxN; 
     
     /* The size of CU to be processed in parallel in HW, which means its neighbor
      * may not be available because the neighbor CU is being processed simultaneously.
@@ -768,7 +764,11 @@ typedef struct x265_param
        8 for 8x8, 16 for 16x16, 32 for 32x32, other values are prohibited, default is 32 */
     int intraSyncSize;
 
-    int bEnableCu64; // enable or disable 64x64 CU coding, effective only when CTU is 64x64
+    /* enable or disable 64x64 CU coding, effective only when CTU is 64x64 */
+    int bEnableCu64;
+
+    /* enable RDO in mode decision and CU size selection */
+    int bEnableIntraRdo; 
 
     /* x265_param_default() will auto-detect this cpu capability bitmap.  it is
      * recommended to not change this value unless you know the cpu detection is

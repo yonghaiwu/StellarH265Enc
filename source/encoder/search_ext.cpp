@@ -48,26 +48,26 @@ using namespace X265_NS;
 
 SearchExt::SearchExt()
 {
-    memset(m_rqt, 0, sizeof(m_rqt));
+    //memset(m_rqt, 0, sizeof(m_rqt));
 
-    for (int i = 0; i < 3; i++)
-    {
-        m_qtTempTransformSkipFlag[i] = NULL;
-        m_qtTempCbf[i] = NULL;
-    }
+    //for (int i = 0; i < 3; i++)
+    //{
+    //    m_qtTempTransformSkipFlag[i] = NULL;
+    //    m_qtTempCbf[i] = NULL;
+    //}
 
-    m_numLayers = 0;
-    m_intraPred = NULL;
-    m_intraPredAngs = NULL;
-    m_fencScaled = NULL;
-    m_fencTransposed = NULL;
-    m_tsCoeff = NULL;
-    m_tsResidual = NULL;
-    m_tsRecon = NULL;
-    m_param = NULL;
-    m_slice = NULL;
-    m_frame = NULL;
-    m_maxTUDepth = -1;
+    //m_numLayers = 0;
+    //m_intraPred = NULL;
+    //m_intraPredAngs = NULL;
+    //m_fencScaled = NULL;
+    //m_fencTransposed = NULL;
+    //m_tsCoeff = NULL;
+    //m_tsResidual = NULL;
+    //m_tsRecon = NULL;
+    //m_param = NULL;
+    //m_slice = NULL;
+    //m_frame = NULL;
+    //m_maxTUDepth = -1;
 }
 
 bool SearchExt::initSearch(const x265_param& param, ScalingList& scalingList)
@@ -84,9 +84,11 @@ bool SearchExt::initSearch(const x265_param& param, ScalingList& scalingList)
     bool ok = m_quant.init(param.psyRdoq, scalingList, m_entropyCoder);
     if (m_param->noiseReductionIntra || m_param->noiseReductionInter )
         ok &= m_quant.allocNoiseReduction(param);
-
+#if STELLAR_ALG_EN
     ok &= PredictExt::allocBuffers(param.internalCsp); /* sets m_hChromaShift & m_vChromaShift */
-
+#else
+    ok &= Predict::allocBuffers(param.internalCsp); /* sets m_hChromaShift & m_vChromaShift */
+#endif
     /* When frame parallelism is active, only 'refLagPixels' of reference frames will be guaranteed
      * available for motion reference.  See refLagRows in FrameEncoder::compressCTURows() */
     m_refLagPixels = m_bFrameParallel ? param.searchRange : param.sourceHeight;
@@ -179,27 +181,27 @@ fail:
 
 SearchExt::~SearchExt()
 {
-    for (uint32_t i = 0; i <= m_numLayers; i++)
-    {
-        X265_FREE(m_rqt[i].coeffRQT[0]);
-        m_rqt[i].reconQtYuv.destroy();
-        m_rqt[i].resiQtYuv.destroy();
-    }
+    //for (uint32_t i = 0; i <= m_numLayers; i++)
+    //{
+    //    X265_FREE(m_rqt[i].coeffRQT[0]);
+    //    m_rqt[i].reconQtYuv.destroy();
+    //    m_rqt[i].resiQtYuv.destroy();
+    //}
 
-    for (uint32_t i = 0; i <= m_param->maxCUDepth; i++)
-    {
-        m_rqt[i].tmpResiYuv.destroy();
-        m_rqt[i].tmpPredYuv.destroy();
-        m_rqt[i].bidirPredYuv[0].destroy();
-        m_rqt[i].bidirPredYuv[1].destroy();
-    }
+    //for (uint32_t i = 0; i <= m_param->maxCUDepth; i++)
+    //{
+    //    m_rqt[i].tmpResiYuv.destroy();
+    //    m_rqt[i].tmpPredYuv.destroy();
+    //    m_rqt[i].bidirPredYuv[0].destroy();
+    //    m_rqt[i].bidirPredYuv[1].destroy();
+    //}
 
-    X265_FREE(m_qtTempCbf[0]);
-    X265_FREE(m_qtTempTransformSkipFlag[0]);
-    X265_FREE(m_intraPred);
-    X265_FREE(m_tsCoeff);
-    X265_FREE(m_tsResidual);
-    X265_FREE(m_tsRecon);
+    //X265_FREE(m_qtTempCbf[0]);
+    //X265_FREE(m_qtTempTransformSkipFlag[0]);
+    //X265_FREE(m_intraPred);
+    //X265_FREE(m_tsCoeff);
+    //X265_FREE(m_tsResidual);
+    //X265_FREE(m_tsRecon);
 }
 
 int SearchExt::setLambdaFromQP(const CUData& ctu, int qp, int lambdaQp)
@@ -691,7 +693,7 @@ void SearchExt::residualTransformQuantIntra(Mode& mode, const CUGeom& cuGeom, ui
     uint32_t log2TrSize = cuGeom.log2CUSize - tuDepth;
     bool     bCheckFull = log2TrSize <= depthRange[1];
 
-    X265_CHECK(m_slice->m_sliceType != I_SLICE, "residualTransformQuantIntra not intended for I slices\n");
+    //X265_CHECK(m_slice->m_sliceType != I_SLICE, "residualTransformQuantIntra not intended for I slices\n");
 
     /* we still respect rdPenalty == 2, we can forbid 32x32 intra TU. rdPenalty = 1 is impossible
      * since we are not measuring RD cost */
@@ -1307,7 +1309,10 @@ void SearchExt::checkIntraInInter(Mode& intraMode, const CUGeom& cuGeom)
     IntraNeighbors intraNeighbors;
     initIntraNeighbors(cu, absPartIdx, initTuDepth, true, &intraNeighbors);
     initAdiPattern(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
-
+#if STELLAR_ALG_EN
+    initAdiPatternOrigNeigh(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
+    generateNeighCombineRecAndOrig(cu, cuGeom, absPartIdx, intraNeighbors, m_param->intraSyncSize);
+#endif
     const pixel* fenc = intraMode.fencYuv->m_buf[0];
     uint32_t stride = intraMode.fencYuv->m_size;
 
@@ -1524,14 +1529,17 @@ sse_t SearchExt::estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uin
     sse_t totalDistortion = 0;
 
     int checkTransformSkip = m_slice->m_pps->bTransformSkipEnabled && !cu.m_tqBypass[0] && cu.m_partSize[0] != SIZE_2Nx2N;
-
     // loop over partitions
     for (uint32_t puIdx = 0; puIdx < numPU; puIdx++, absPartIdx += qNumParts)
     {
         uint32_t bmode = 0;
+        bool bmodeAlreadyDecided = false;
 
         if (intraMode.cu.m_lumaIntraDir[puIdx] != (uint8_t)ALL_IDX)
+        {
             bmode = intraMode.cu.m_lumaIntraDir[puIdx];
+            bmodeAlreadyDecided = true;
+        }
         else
         {
             uint64_t candCostList[MAX_RD_INTRA_MODES];
@@ -1546,7 +1554,10 @@ sse_t SearchExt::estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uin
                 IntraNeighbors intraNeighbors;
                 initIntraNeighbors(cu, absPartIdx, initTuDepth, true, &intraNeighbors);
                 initAdiPattern(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
-
+#if STELLAR_ALG_EN
+                initAdiPatternOrigNeigh(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
+                generateNeighCombineRecAndOrig(cu, cuGeom, absPartIdx, intraNeighbors, m_param->intraSyncSize);
+#endif
                 // determine set of modes to be tested (using prediction signal only)
                 const pixel* fenc = fencYuv->getLumaAddr(absPartIdx);
                 uint32_t stride = predYuv->m_size;
@@ -1598,7 +1609,8 @@ sse_t SearchExt::estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uin
                         else
                             sad = sa8d(fenc, scaleStride, &m_intraPredAngs[(mode - 2) * (scaleTuSize * scaleTuSize)], scaleTuSize) << costShift;
                         modeCosts[mode] = m_rdCost.calcRdSADCost(sad, bits);
-                        COPY1_IF_LT(bcost, modeCosts[mode]);
+                        //COPY1_IF_LT(bcost, modeCosts[mode]);
+                        COPY2_IF_LT(bcost, modeCosts[mode], bmode, mode);
                     }
                 }
                 else
@@ -1610,7 +1622,8 @@ sse_t SearchExt::estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uin
                         primitives.cu[sizeIdx].intra_pred[mode](m_intraPred, scaleTuSize, intraNeighbourBuf[filter], mode, scaleTuSize <= 16);
                         sad = sa8d(fenc, scaleStride, m_intraPred, scaleTuSize) << costShift;
                         modeCosts[mode] = m_rdCost.calcRdSADCost(sad, bits);
-                        COPY1_IF_LT(bcost, modeCosts[mode]);
+                        //COPY1_IF_LT(bcost, modeCosts[mode]);
+                        COPY2_IF_LT(bcost, modeCosts[mode], bmode, mode);
                     }
                 }
 
@@ -1628,55 +1641,66 @@ sse_t SearchExt::estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uin
                         updateCandList(mode, modeCosts[mode], maxCandCount, rdModeList, candCostList);
             }
 
-            /* measure best candidates using simple RDO (no TU splits) */
-            bcost = MAX_INT64;
-            for (int i = 0; i < maxCandCount; i++)
+            if (m_param->bEnableIntraRdo)
             {
-                if (candCostList[i] == MAX_INT64)
-                    break;
+                /* measure best candidates using simple RDO (no TU splits) */
+                bcost = MAX_INT64;
+                for (int i = 0; i < maxCandCount; i++)
+                {
+                    if (candCostList[i] == MAX_INT64)
+                        break;
 
-                ProfileCUScope(intraMode.cu, intraRDOElapsedTime[cuGeom.depth], countIntraRDO[cuGeom.depth]);
+                    ProfileCUScope(intraMode.cu, intraRDOElapsedTime[cuGeom.depth], countIntraRDO[cuGeom.depth]);
 
-                m_entropyCoder.load(m_rqt[depth].cur);
-                cu.setLumaIntraDirSubParts(rdModeList[i], absPartIdx, depth + initTuDepth);
+                    m_entropyCoder.load(m_rqt[depth].cur);
+                    cu.setLumaIntraDirSubParts(rdModeList[i], absPartIdx, depth + initTuDepth);
 
-                Cost icosts;
-                if (checkTransformSkip)
-                    codeIntraLumaTSkip(intraMode, cuGeom, initTuDepth, absPartIdx, icosts);
-                else
-                    codeIntraLumaQT(intraMode, cuGeom, initTuDepth, absPartIdx, false, icosts, depthRange);
-                COPY2_IF_LT(bcost, icosts.rdcost, bmode, rdModeList[i]);
+                    Cost icosts;
+                    if (checkTransformSkip)
+                        codeIntraLumaTSkip(intraMode, cuGeom, initTuDepth, absPartIdx, icosts);
+                    else
+                        codeIntraLumaQT(intraMode, cuGeom, initTuDepth, absPartIdx, false, icosts, depthRange);
+                    COPY2_IF_LT(bcost, icosts.rdcost, bmode, rdModeList[i]);
+                }
             }
+            else
+            {
+                cu.setLumaIntraDirSubParts(bmode, absPartIdx, depth + initTuDepth);
+                totalDistortion += bcost;
+            }
+
         }
 
         ProfileCUScope(intraMode.cu, intraRDOElapsedTime[cuGeom.depth], countIntraRDO[cuGeom.depth]);
 
-        /* remeasure best mode, allowing TU splits */
-        cu.setLumaIntraDirSubParts(bmode, absPartIdx, depth + initTuDepth);
-        m_entropyCoder.load(m_rqt[depth].cur);
-
-        Cost icosts;
-        if (checkTransformSkip)
-            codeIntraLumaTSkip(intraMode, cuGeom, initTuDepth, absPartIdx, icosts);
-        else
-            codeIntraLumaQT(intraMode, cuGeom, initTuDepth, absPartIdx, true, icosts, depthRange);
-        totalDistortion += icosts.distortion;
-
-        extractIntraResultQT(cu, *reconYuv, initTuDepth, absPartIdx);
-
-        // set reconstruction for next intra prediction blocks
-        if (puIdx != numPU - 1)
+        if (m_param->bEnableIntraRdo || bmodeAlreadyDecided)
         {
-            /* This has important implications for parallelism and RDO.  It is writing intermediate results into the
-             * output recon picture, so it cannot proceed in parallel with anything else when doing INTRA_NXN. Also
-             * it is not updating m_rdContexts[depth].cur for the later PUs which I suspect is slightly wrong. I think
-             * that the contexts should be tracked through each PU */
-            PicYuv*  reconPic = m_frame->m_reconPic;
-            pixel*   dst       = reconPic->getLumaAddr(cu.m_cuAddr, cuGeom.absPartIdx + absPartIdx);
-            uint32_t dststride = reconPic->m_stride;
-            const pixel*   src = reconYuv->getLumaAddr(absPartIdx);
-            uint32_t srcstride = reconYuv->m_size;
-            primitives.cu[log2TrSize - 2].copy_pp(dst, dststride, src, srcstride);
+            /* remeasure best mode, allowing TU splits */
+            cu.setLumaIntraDirSubParts(bmode, absPartIdx, depth + initTuDepth);
+            m_entropyCoder.load(m_rqt[depth].cur);
+
+            Cost icosts;
+            if (checkTransformSkip)
+                codeIntraLumaTSkip(intraMode, cuGeom, initTuDepth, absPartIdx, icosts);
+            else
+                codeIntraLumaQT(intraMode, cuGeom, initTuDepth, absPartIdx, true, icosts, depthRange);
+            totalDistortion += icosts.distortion;
+            extractIntraResultQT(cu, *reconYuv, initTuDepth, absPartIdx);
+
+            // set reconstruction for next intra prediction blocks
+            if (puIdx != numPU - 1)
+            {
+                /* This has important implications for parallelism and RDO.  It is writing intermediate results into the
+                 * output recon picture, so it cannot proceed in parallel with anything else when doing INTRA_NXN. Also
+                 * it is not updating m_rdContexts[depth].cur for the later PUs which I suspect is slightly wrong. I think
+                 * that the contexts should be tracked through each PU */
+                PicYuv* reconPic = m_frame->m_reconPic;
+                pixel* dst = reconPic->getLumaAddr(cu.m_cuAddr, cuGeom.absPartIdx + absPartIdx);
+                uint32_t dststride = reconPic->m_stride;
+                const pixel* src = reconYuv->getLumaAddr(absPartIdx);
+                uint32_t srcstride = reconYuv->m_size;
+                primitives.cu[log2TrSize - 2].copy_pp(dst, dststride, src, srcstride);
+            }
         }
     }
 
@@ -1735,7 +1759,11 @@ void SearchExt::getBestIntraModeChroma(Mode& intraMode, const CUGeom& cuGeom)
         {
             const pixel* fenc = fencYuv->m_buf[chromaId];
             pixel* pred = predYuv->m_buf[chromaId];
+#if STELLAR_ALG_EN
             PredictExt::initAdiPatternChroma(cu, cuGeom, 0, intraNeighbors, chromaId);
+#else
+            Predict::initAdiPatternChroma(cu, cuGeom, 0, intraNeighbors, chromaId);
+#endif
             // get prediction signal
             predIntraChromaAng(chromaPredMode, pred, fencYuv->m_csize, log2TrSizeC);
             cost += primitives.cu[log2TrSizeC - 2].sa8d(fenc, predYuv->m_csize, pred, fencYuv->m_csize) << costShift;

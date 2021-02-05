@@ -57,12 +57,14 @@ inline pixel weightBidir(int w0, int16_t P0, int w1, int16_t P1, int round, int 
 
 PredictExt::PredictExt()
 {
+    m_frame = nullptr;
+    memset(intraOrigNeighbourBuf, 0, sizeof(intraOrigNeighbourBuf));
 }
 
 PredictExt::~PredictExt()
 {
-    m_predShortYuv[0].destroy();
-    m_predShortYuv[1].destroy();
+    //m_predShortYuv[0].destroy();
+    //m_predShortYuv[1].destroy();
 }
 
 bool PredictExt::allocBuffers(int csp)
@@ -597,6 +599,94 @@ void PredictExt::predIntraChromaAng(uint32_t dirMode, pixel* dst, intptr_t strid
     primitives.cu[sizeIdx].intra_pred[dirMode](dst, stride, intraNeighbourBuf[filter], dirMode, 0);
 }
 
+/* Combine rec and orig neighbor pixels:
+ * because we do all sub CU under "IntraSyncSize"(normally 32x32) in parallel,
+ * the neighbors inside "IntraSyncSize" are not available, so we'll use origianl
+ * pixels instead, and the reconstruction process using correct neighbor will be
+ * done later
+*/
+void PredictExt::generateNeighCombineRecAndOrig(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, const int intraSyncSize)
+{
+    int intraSyncBlkSize = intraSyncSize >> 2;
+    int intraSyncBlkSizeSquare = intraSyncBlkSize * intraSyncBlkSize;
+    uint32_t log2IntraSyncSize = g_log2Size[intraSyncSize];
+    if (cuGeom.log2CUSize < log2IntraSyncSize)
+    {
+        // top neighbor: 0...(refSize-1), total refSize pixels
+        // left neighbor: refSize...(2*refSize -2), , total (refSize-1) pixels
+        uint32_t tuSize = 1 << intraNeighbors.log2TrSize;
+        uint32_t refSize = tuSize * 2 + 1;
+        int absPartIdx = g_zscanToRaster[cu.m_absIdxInCTU & (intraSyncBlkSizeSquare - 1)];
+
+        // when top/top-left/top-right is inside of "IntraSyncSize", copy original pixels
+        if (absPartIdx > RASTER_SIZE) // not first row of intraSyncSize unit, use original neighbor
+        {
+            // copy both filtered and unfiltered neighbor
+            memcpy(intraNeighbourBuf[0], intraOrigNeighbourBuf[0], sizeof(pixel) * refSize);
+            memcpy(intraNeighbourBuf[1], intraOrigNeighbourBuf[1], sizeof(pixel) * refSize);
+        }
+
+        // when left/bottom-left is inside of "IntraSyncSize", copy original pixels
+        if (absPartIdx & (RASTER_SIZE - 1)) // not first column of intraSyncSize unit, use original neighbor
+        {
+            memcpy(&intraNeighbourBuf[0][refSize], &intraOrigNeighbourBuf[0][refSize], sizeof(pixel) * (refSize - 1));
+            memcpy(&intraNeighbourBuf[1][refSize], &intraOrigNeighbourBuf[1][refSize], sizeof(pixel) * (refSize - 1));
+        }
+    }
+}
+
+void PredictExt::initAdiPatternOrigNeigh(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, int dirMode)
+{
+    int tuSize = 1 << intraNeighbors.log2TrSize;
+    int tuSize2 = tuSize << 1;
+
+    PicYuv* encPic = m_frame->m_fencPic;
+    pixel* adiOrigin = encPic->getLumaAddr(cu.m_cuAddr, cuGeom.absPartIdx + puAbsPartIdx);
+    intptr_t picStride = encPic->m_stride;
+
+    fillReferenceSamples(adiOrigin, picStride, intraNeighbors, intraOrigNeighbourBuf[0]);
+
+    pixel* refBuf = intraOrigNeighbourBuf[0];
+    pixel* fltBuf = intraOrigNeighbourBuf[1];
+
+    pixel topLeft = refBuf[0], topLast = refBuf[tuSize2], leftLast = refBuf[tuSize2 + tuSize2];
+
+    if (dirMode == ALL_IDX ? (8 | 16 | 32) & tuSize : g_intraFilterFlags[dirMode] & tuSize)
+    {
+        // generate filtered intra prediction samples
+
+        if (cu.m_slice->m_sps->bUseStrongIntraSmoothing && tuSize == 32)
+        {
+            const int threshold = 1 << (X265_DEPTH - 5);
+
+            pixel topMiddle = refBuf[32], leftMiddle = refBuf[tuSize2 + 32];
+
+            if (abs(topLeft + topLast - (topMiddle << 1)) < threshold &&
+                abs(topLeft + leftLast - (leftMiddle << 1)) < threshold)
+            {
+                // "strong" bilinear interpolation
+                const int shift = 5 + 1;
+                int init = (topLeft << shift) + tuSize;
+                int deltaL, deltaR;
+
+                deltaL = leftLast - topLeft; deltaR = topLast - topLeft;
+
+                fltBuf[0] = topLeft;
+                for (int i = 1; i < tuSize2; i++)
+                {
+                    fltBuf[i + tuSize2] = (pixel)((init + deltaL * i) >> shift); // Left Filtering
+                    fltBuf[i] = (pixel)((init + deltaR * i) >> shift);           // Above Filtering
+                }
+                fltBuf[tuSize2] = topLast;
+                fltBuf[tuSize2 + tuSize2] = leftLast;
+                return;
+            }
+        }
+
+        primitives.cu[intraNeighbors.log2TrSize - 2].intra_filter(refBuf, fltBuf);
+    }
+}
+
 void PredictExt::initAdiPattern(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, int dirMode)
 {
     int tuSize = 1 << intraNeighbors.log2TrSize;
@@ -659,6 +749,18 @@ void PredictExt::initAdiPatternChroma(const CUData& cu, const CUGeom& cuGeom, ui
 
     if (m_csp == X265_CSP_I444)
         primitives.cu[intraNeighbors.log2TrSize - 2].intra_filter(intraNeighbourBuf[0], intraNeighbourBuf[1]);
+}
+
+void PredictExt::initAdiPatternChromaOrigNeigh(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, uint32_t chromaId)
+{
+    PicYuv* encPic = m_frame->m_fencPic;
+    const pixel* adiOrigin = encPic->getChromaAddr(chromaId, cu.m_cuAddr, cuGeom.absPartIdx + puAbsPartIdx);
+    intptr_t picStride = encPic->m_strideC;
+
+    fillReferenceSamples(adiOrigin, picStride, intraNeighbors, intraOrigNeighbourBuf[0]);
+
+    if (m_csp == X265_CSP_I444)
+        primitives.cu[intraNeighbors.log2TrSize - 2].intra_filter(intraOrigNeighbourBuf[0], intraOrigNeighbourBuf[1]);
 }
 
 void PredictExt::initIntraNeighbors(const CUData& cu, uint32_t absPartIdx, uint32_t tuDepth, bool isLuma, IntraNeighbors *intraNeighbors)

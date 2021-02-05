@@ -247,8 +247,11 @@ inline int getTUBits(int idx, int numIdx)
 {
     return idx + (idx < numIdx - 1);
 }
-
+#if STELLAR_ALG_EN
 class Search : public PredictExt
+#else 
+class Search : public Predict
+#endif
 {
 public:
 

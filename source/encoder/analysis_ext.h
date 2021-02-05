@@ -185,6 +185,7 @@ protected:
 
     /* generate residual and recon pixels for an entire CTU recursively (RD0) */
     void encodeResidue(const CUData& parentCTU, const CUGeom& cuGeom);
+    void encodeIntraSyncSizeResidue(const CUGeom& cuGeom, const CUData& parentCU, uint32_t absPartIdx);
 
     int calculateQpforCuSize(const CUData& ctu, const CUGeom& cuGeom, int32_t complexCheck = 0, double baseQP = -1);
     uint32_t calculateCUVariance(const CUData& ctu, const CUGeom& cuGeom);
