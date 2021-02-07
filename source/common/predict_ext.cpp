@@ -605,7 +605,7 @@ void PredictExt::predIntraChromaAng(uint32_t dirMode, pixel* dst, intptr_t strid
  * pixels instead, and the reconstruction process using correct neighbor will be
  * done later
 */
-void PredictExt::generateNeighCombineRecAndOrig(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, const int intraSyncSize)
+void PredictExt::generateNeighCombineRecAndOrig(const CUData& cu, const CUGeom& cuGeom, const IntraNeighbors& intraNeighbors, const int intraSyncSize)
 {
     int intraSyncBlkSize = intraSyncSize >> 2;
     int intraSyncBlkSizeSquare = intraSyncBlkSize * intraSyncBlkSize;
@@ -619,7 +619,7 @@ void PredictExt::generateNeighCombineRecAndOrig(const CUData& cu, const CUGeom& 
         int absPartIdx = g_zscanToRaster[cu.m_absIdxInCTU & (intraSyncBlkSizeSquare - 1)];
 
         // when top/top-left/top-right is inside of "IntraSyncSize", copy original pixels
-        if (absPartIdx > RASTER_SIZE) // not first row of intraSyncSize unit, use original neighbor
+        if (absPartIdx >= RASTER_SIZE) // not first row of intraSyncSize unit, use original neighbor
         {
             // copy both filtered and unfiltered neighbor
             memcpy(intraNeighbourBuf[0], intraOrigNeighbourBuf[0], sizeof(pixel) * refSize);

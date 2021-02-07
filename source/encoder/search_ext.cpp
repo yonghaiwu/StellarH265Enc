@@ -901,39 +901,60 @@ void SearchExt::codeIntraChromaQt(Mode& mode, const CUGeom& cuGeom, uint32_t tuD
 
             // init availability pattern
             initAdiPatternChroma(cu, cuGeom, absPartIdxC, intraNeighbors, chromaId);
-
+#if STELLAR_ALG_EN
+            initAdiPatternChromaOrigNeigh(cu, cuGeom, absPartIdxC, intraNeighbors, absPartIdxC);
+            generateNeighCombineRecAndOrig(cu, cuGeom, intraNeighbors, m_param->intraSyncSize);
+#endif
             // get prediction signal
             predIntraChromaAng(chromaPredMode, pred, stride, log2TrSizeC);
-            cu.setTransformSkipPartRange(0, ttype, absPartIdxC, tuIterator.absPartIdxStep);
 
-            primitives.cu[sizeIdxC].calcresidual[stride % 64 == 0](fenc, pred, residual, stride);
-
-            uint32_t numSig = m_quant.transformNxN(cu, fenc, stride, residual, stride, coeffC, log2TrSizeC, ttype, absPartIdxC, false);
-            if (numSig)
+            if (m_param->bEnableIntraRdo)
             {
-                m_quant.invtransformNxN(cu, residual, stride, coeffC, log2TrSizeC, ttype, true, false, numSig);
-                bool reconQtAlign = m_rqt[qtLayer].reconQtYuv.getChromaAddrOffset(absPartIdxC) % 64 == 0;
-                bool predAlign = mode.predYuv.getChromaAddrOffset(absPartIdxC) % 64 == 0;
-                bool residualAlign = resiYuv.getChromaAddrOffset(absPartIdxC) % 64 == 0;
-                bool bufferAlignCheck = reconQtAlign && predAlign && residualAlign && (reconQtStride % 64 == 0) && (stride % 64 == 0);
-                primitives.cu[sizeIdxC].add_ps[bufferAlignCheck](reconQt, reconQtStride, pred, residual, stride, stride);
-                cu.setCbfPartRange(1 << tuDepth, ttype, absPartIdxC, tuIterator.absPartIdxStep);
+                cu.setTransformSkipPartRange(0, ttype, absPartIdxC, tuIterator.absPartIdxStep);
+
+                primitives.cu[sizeIdxC].calcresidual[stride % 64 == 0](fenc, pred, residual, stride);
+
+                uint32_t numSig = m_quant.transformNxN(cu, fenc, stride, residual, stride, coeffC, log2TrSizeC, ttype, absPartIdxC, false);
+                if (numSig)
+                {
+                    m_quant.invtransformNxN(cu, residual, stride, coeffC, log2TrSizeC, ttype, true, false, numSig);
+                    bool reconQtAlign = m_rqt[qtLayer].reconQtYuv.getChromaAddrOffset(absPartIdxC) % 64 == 0;
+                    bool predAlign = mode.predYuv.getChromaAddrOffset(absPartIdxC) % 64 == 0;
+                    bool residualAlign = resiYuv.getChromaAddrOffset(absPartIdxC) % 64 == 0;
+                    bool bufferAlignCheck = reconQtAlign && predAlign && residualAlign && (reconQtStride % 64 == 0) && (stride % 64 == 0);
+                    primitives.cu[sizeIdxC].add_ps[bufferAlignCheck](reconQt, reconQtStride, pred, residual, stride, stride);
+                    cu.setCbfPartRange(1 << tuDepth, ttype, absPartIdxC, tuIterator.absPartIdxStep);
+                }
+                else
+                {
+                    // no coded residual, recon = pred
+                    primitives.cu[sizeIdxC].copy_pp(reconQt, reconQtStride, pred, stride);
+                    cu.setCbfPartRange(0, ttype, absPartIdxC, tuIterator.absPartIdxStep);
+                }
+
+                outCost.distortion += m_rdCost.scaleChromaDist(chromaId, primitives.cu[sizeIdxC].sse_pp(reconQt, reconQtStride, fenc, stride));
+
+                if (m_rdCost.m_psyRd)
+                    outCost.energy += m_rdCost.psyCost(sizeIdxC, fenc, stride, reconQt, reconQtStride);
+                else if (m_rdCost.m_ssimRd)
+                    outCost.energy += m_quant.ssimDistortion(cu, fenc, stride, reconQt, reconQtStride, log2TrSizeC, ttype, absPartIdxC);
+
+                primitives.cu[sizeIdxC].copy_pp(picReconC, picStride, reconQt, reconQtStride);
             }
             else
             {
-                // no coded residual, recon = pred
-                primitives.cu[sizeIdxC].copy_pp(reconQt, reconQtStride, pred, stride);
-                cu.setCbfPartRange(0, ttype, absPartIdxC, tuIterator.absPartIdxStep);
+                // TODO (John):
+                int32_t costShift = 0;
+                uint32_t tuSize = 1 << log2TrSizeC;
+                if (tuSize > 32)
+                {
+                    costShift = 2;
+                    log2TrSizeC = 5;
+                }
+                Yuv* predYuv = &mode.predYuv;
+                Yuv* fencYuv = const_cast<Yuv*>(mode.fencYuv);
+                outCost.distortion += primitives.cu[log2TrSizeC - 2].sa8d(fenc, predYuv->m_csize, pred, fencYuv->m_csize) << costShift;
             }
-
-            outCost.distortion += m_rdCost.scaleChromaDist(chromaId, primitives.cu[sizeIdxC].sse_pp(reconQt, reconQtStride, fenc, stride));
-
-            if (m_rdCost.m_psyRd)
-                outCost.energy += m_rdCost.psyCost(sizeIdxC, fenc, stride, reconQt, reconQtStride);
-            else if(m_rdCost.m_ssimRd)
-                outCost.energy += m_quant.ssimDistortion(cu, fenc, stride, reconQt, reconQtStride, log2TrSizeC, ttype, absPartIdxC);
-
-            primitives.cu[sizeIdxC].copy_pp(picReconC, picStride, reconQt, reconQtStride);
         }
     }
     while (tuIterator.isNextSection());
@@ -1322,7 +1343,7 @@ void SearchExt::checkIntraInInter(Mode& intraMode, const CUGeom& cuGeom)
     initAdiPattern(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
 #if STELLAR_ALG_EN
     initAdiPatternOrigNeigh(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
-    generateNeighCombineRecAndOrig(cu, cuGeom, absPartIdx, intraNeighbors, m_param->intraSyncSize);
+    generateNeighCombineRecAndOrig(cu, cuGeom, intraNeighbors, m_param->intraSyncSize);
 #endif
     const pixel* fenc = intraMode.fencYuv->m_buf[0];
     uint32_t stride = intraMode.fencYuv->m_size;
@@ -1567,7 +1588,7 @@ sse_t SearchExt::estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uin
                 initAdiPattern(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
 #if STELLAR_ALG_EN
                 initAdiPatternOrigNeigh(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
-                generateNeighCombineRecAndOrig(cu, cuGeom, absPartIdx, intraNeighbors, m_param->intraSyncSize);
+                generateNeighCombineRecAndOrig(cu, cuGeom, intraNeighbors, m_param->intraSyncSize);
 #endif
                 // determine set of modes to be tested (using prediction signal only)
                 const pixel* fenc = fencYuv->getLumaAddr(absPartIdx);
@@ -1861,14 +1882,21 @@ sse_t SearchExt::estIntraPredChromaQT(Mode &intraMode, const CUGeom& cuGeom)
                 if (!(absPartIdxC & (qNumParts - 1)))
                     m_entropyCoder.codeIntraDirChroma(cu, absPartIdxC, modeList);
             }
-
-            codeSubdivCbfQTChroma(cu, initTuDepth, absPartIdxC);
-            codeCoeffQTChroma(cu, initTuDepth, absPartIdxC, TEXT_CHROMA_U);
-            codeCoeffQTChroma(cu, initTuDepth, absPartIdxC, TEXT_CHROMA_V);
-            uint32_t bits = m_entropyCoder.getNumberOfWrittenBits();
-            uint64_t cost = m_rdCost.m_psyRd ? m_rdCost.calcPsyRdCost(outCost.distortion, bits, outCost.energy) : m_rdCost.m_ssimRd ? m_rdCost.calcSsimRdCost(outCost.distortion, bits, outCost.energy)
-                                             : m_rdCost.calcRdCost(outCost.distortion, bits);
-
+            uint64_t cost = UINT64_MAX;
+            if (m_param->bEnableIntraRdo)
+            {
+                codeSubdivCbfQTChroma(cu, initTuDepth, absPartIdxC);
+                codeCoeffQTChroma(cu, initTuDepth, absPartIdxC, TEXT_CHROMA_U);
+                codeCoeffQTChroma(cu, initTuDepth, absPartIdxC, TEXT_CHROMA_V);
+                uint32_t bits = m_entropyCoder.getNumberOfWrittenBits();
+                cost = m_rdCost.m_psyRd ? m_rdCost.calcPsyRdCost(outCost.distortion, bits, outCost.energy) : m_rdCost.m_ssimRd ? m_rdCost.calcSsimRdCost(outCost.distortion, bits, outCost.energy)
+                                        : m_rdCost.calcRdCost(outCost.distortion, bits);
+            }
+            else
+            {
+                uint32_t bits = m_entropyCoder.getNumberOfWrittenBits();
+                cost = m_rdCost.calcRdSADCost(outCost.distortion, bits);
+            }
             if (cost < bestCost)
             {
                 bestCost = cost;

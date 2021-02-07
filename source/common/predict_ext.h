@@ -104,7 +104,7 @@ public:
     void initAdiPatternChroma(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, uint32_t chromaId);
     void initAdiPatternOrigNeigh(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, int dirMode);
     void initAdiPatternChromaOrigNeigh(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, uint32_t chromaId);
-    void generateNeighCombineRecAndOrig(const CUData& cu, const CUGeom& cuGeom, uint32_t puAbsPartIdx, const IntraNeighbors& intraNeighbors, const int intraSyncSize);
+    void generateNeighCombineRecAndOrig(const CUData& cu, const CUGeom& cuGeom, const IntraNeighbors& intraNeighbors, const int intraSyncSize);
 
     /* Intra prediction helper functions */
     void initIntraNeighbors(const CUData& cu, uint32_t absPartIdx, uint32_t tuDepth, bool isLuma, IntraNeighbors *IntraNeighbors);
