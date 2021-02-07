@@ -1271,21 +1271,32 @@ void SearchExt::checkIntra(Mode& intraMode, const CUGeom& cuGeom, PartSize partS
     m_entropyCoder.codePredInfo(cu, 0);
     intraMode.mvBits = m_entropyCoder.getNumberOfWrittenBits() - skipFlagBits;
 
-    bool bCodeDQP = m_slice->m_pps->bUseDQP;
-    m_entropyCoder.codeCoeff(cu, 0, bCodeDQP, tuDepthRange);
-    m_entropyCoder.store(intraMode.contexts);
-    intraMode.totalBits = m_entropyCoder.getNumberOfWrittenBits();
-    intraMode.coeffBits = intraMode.totalBits - intraMode.mvBits - skipFlagBits;
-    const Yuv* fencYuv = intraMode.fencYuv;
-    if (m_rdCost.m_psyRd)
-        intraMode.psyEnergy = m_rdCost.psyCost(cuGeom.log2CUSize - 2, fencYuv->m_buf[0], fencYuv->m_size, intraMode.reconYuv.m_buf[0], intraMode.reconYuv.m_size);
-    else if(m_rdCost.m_ssimRd)
-        intraMode.ssimEnergy = m_quant.ssimDistortion(cu, fencYuv->m_buf[0], fencYuv->m_size, intraMode.reconYuv.m_buf[0], intraMode.reconYuv.m_size, cuGeom.log2CUSize, TEXT_LUMA, 0);
+    if (m_param->bEnableIntraRdo)
+    {
+        bool bCodeDQP = m_slice->m_pps->bUseDQP;
+        m_entropyCoder.codeCoeff(cu, 0, bCodeDQP, tuDepthRange);
+        m_entropyCoder.store(intraMode.contexts);
+        intraMode.totalBits = m_entropyCoder.getNumberOfWrittenBits();
+        intraMode.coeffBits = intraMode.totalBits - intraMode.mvBits - skipFlagBits;
+        const Yuv* fencYuv = intraMode.fencYuv;
+        if (m_rdCost.m_psyRd)
+            intraMode.psyEnergy = m_rdCost.psyCost(cuGeom.log2CUSize - 2, fencYuv->m_buf[0], fencYuv->m_size, intraMode.reconYuv.m_buf[0], intraMode.reconYuv.m_size);
+        else if (m_rdCost.m_ssimRd)
+            intraMode.ssimEnergy = m_quant.ssimDistortion(cu, fencYuv->m_buf[0], fencYuv->m_size, intraMode.reconYuv.m_buf[0], intraMode.reconYuv.m_size, cuGeom.log2CUSize, TEXT_LUMA, 0);
 
-    intraMode.resEnergy = primitives.cu[cuGeom.log2CUSize - 2].sse_pp(intraMode.fencYuv->m_buf[0], intraMode.fencYuv->m_size, intraMode.predYuv.m_buf[0], intraMode.predYuv.m_size);
+        intraMode.resEnergy = primitives.cu[cuGeom.log2CUSize - 2].sse_pp(intraMode.fencYuv->m_buf[0], intraMode.fencYuv->m_size, intraMode.predYuv.m_buf[0], intraMode.predYuv.m_size);
 
-    updateModeCost(intraMode);
-    checkDQP(intraMode, cuGeom);
+        updateModeCost(intraMode);
+        checkDQP(intraMode, cuGeom);
+    }
+    else
+    {
+        m_entropyCoder.store(intraMode.contexts);
+        intraMode.totalBits = m_entropyCoder.getNumberOfWrittenBits();
+        intraMode.coeffBits = 0;
+        intraMode.rdCost = m_rdCost.calcRdSADCost(intraMode.distortion, intraMode.totalBits);
+        checkDQP(intraMode, cuGeom);
+    }
 }
 
 /* Note that this function does not save the best intra prediction, it must
@@ -1584,6 +1595,7 @@ sse_t SearchExt::estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uin
                 uint32_t bits = (mpms & ((uint64_t)1 << DC_IDX)) ? m_entropyCoder.bitsIntraModeMPM(mpmModes, DC_IDX) : rbits;
                 uint32_t sad = sa8d(fenc, scaleStride, m_intraPred, scaleStride) << costShift;
                 modeCosts[DC_IDX] = bcost = m_rdCost.calcRdSADCost(sad, bits);
+                bmode = DC_IDX;
 
                 // PLANAR
                 pixel* planar = intraNeighbourBuf[0];
@@ -1594,7 +1606,8 @@ sse_t SearchExt::estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uin
                 bits = (mpms & ((uint64_t)1 << PLANAR_IDX)) ? m_entropyCoder.bitsIntraModeMPM(mpmModes, PLANAR_IDX) : rbits;
                 sad = sa8d(fenc, scaleStride, m_intraPred, scaleStride) << costShift;
                 modeCosts[PLANAR_IDX] = m_rdCost.calcRdSADCost(sad, bits);
-                COPY1_IF_LT(bcost, modeCosts[PLANAR_IDX]);
+                //COPY1_IF_LT(bcost, modeCosts[PLANAR_IDX]);
+                COPY2_IF_LT(bcost, modeCosts[PLANAR_IDX], bmode, PLANAR_IDX);
 
                 // angular predictions
                 if (primitives.cu[sizeIdx].intra_pred_allangs)
