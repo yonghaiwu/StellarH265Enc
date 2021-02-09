@@ -272,7 +272,7 @@ public:
 
     bool     initSearch(const x265_param& param, ScalingList& scalingList);
     int      setLambdaFromQP(const CUData& ctu, int qp, int lambdaQP = -1); /* returns real quant QP in valid spec range */
-
+    void     setUseOrigNeighFlag(bool flag) { m_bPredUseOrigNeigh = flag; }
     // mark temp RD entropy contexts as uninitialized; useful for finding loads without stores
     void     invalidateContexts(int fromDepth);
 
@@ -413,6 +413,8 @@ protected:
     void updateModeCost(Mode& m) const { m.rdCost = m_rdCost.m_psyRd ? m_rdCost.calcPsyRdCost(m.distortion, m.totalBits, m.psyEnergy)
                                                 : (m_rdCost.m_ssimRd ? m_rdCost.calcSsimRdCost(m.distortion, m.totalBits, m.ssimEnergy) 
                                                 : m_rdCost.calcRdCost(m.distortion, m.totalBits)); }
+
+    bool m_bPredUseOrigNeigh;
 };
 }
 

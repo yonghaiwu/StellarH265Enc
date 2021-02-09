@@ -68,6 +68,7 @@ SearchExt::SearchExt()
     //m_slice = NULL;
     //m_frame = NULL;
     //m_maxTUDepth = -1;
+    m_bPredUseOrigNeigh = false;
 }
 
 bool SearchExt::initSearch(const x265_param& param, ScalingList& scalingList)
@@ -902,13 +903,17 @@ void SearchExt::codeIntraChromaQt(Mode& mode, const CUGeom& cuGeom, uint32_t tuD
             // init availability pattern
             initAdiPatternChroma(cu, cuGeom, absPartIdxC, intraNeighbors, chromaId);
 #if STELLAR_ALG_EN
-            initAdiPatternChromaOrigNeigh(cu, cuGeom, absPartIdxC, intraNeighbors, absPartIdxC);
-            generateNeighCombineRecAndOrig(cu, cuGeom, intraNeighbors, m_param->intraSyncSize);
+            if (m_bPredUseOrigNeigh)
+            {
+                initAdiPatternChromaOrigNeigh(cu, cuGeom, absPartIdxC, intraNeighbors, absPartIdxC);
+                generateNeighCombineRecAndOrig(cu, cuGeom, intraNeighbors, m_param->intraSyncSize);
+            }
 #endif
             // get prediction signal
             predIntraChromaAng(chromaPredMode, pred, stride, log2TrSizeC);
 
-            if (m_param->bEnableIntraRdo)
+            // when intra RDO is enabled, or doing reconstruction to get final result, transform&quant&etc need to be executed
+            if (m_param->bEnableIntraRdo || (!m_bPredUseOrigNeigh))
             {
                 cu.setTransformSkipPartRange(0, ttype, absPartIdxC, tuIterator.absPartIdxStep);
 
@@ -1266,6 +1271,8 @@ void SearchExt::checkIntra(Mode& intraMode, const CUGeom& cuGeom, PartSize partS
     uint32_t tuDepthRange[2];
     cu.getIntraTUQtDepthRange(tuDepthRange, 0);
 
+    if (m_param->intraSyncSize)
+        m_bPredUseOrigNeigh = true;
     intraMode.initCosts();
     intraMode.lumaDistortion += estIntraPredQT(intraMode, cuGeom, tuDepthRange);
     if (m_csp != X265_CSP_I400)
@@ -1337,13 +1344,19 @@ void SearchExt::checkIntraInInter(Mode& intraMode, const CUGeom& cuGeom)
     uint32_t tuSize = 1 << log2TrSize;
     const uint32_t absPartIdx = 0;
 
+    if (m_param->intraSyncSize)
+        m_bPredUseOrigNeigh = true;
+
     // Reference sample smoothing
     IntraNeighbors intraNeighbors;
     initIntraNeighbors(cu, absPartIdx, initTuDepth, true, &intraNeighbors);
     initAdiPattern(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
 #if STELLAR_ALG_EN
-    initAdiPatternOrigNeigh(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
-    generateNeighCombineRecAndOrig(cu, cuGeom, intraNeighbors, m_param->intraSyncSize);
+    if (m_bPredUseOrigNeigh)
+    {
+        initAdiPatternOrigNeigh(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
+        generateNeighCombineRecAndOrig(cu, cuGeom, intraNeighbors, m_param->intraSyncSize);
+    }
 #endif
     const pixel* fenc = intraMode.fencYuv->m_buf[0];
     uint32_t stride = intraMode.fencYuv->m_size;
@@ -1494,7 +1507,7 @@ void SearchExt::encodeIntraInInter(Mode& intraMode, const CUGeom& cuGeom)
 
     CUData& cu = intraMode.cu;
     Yuv* reconYuv = &intraMode.reconYuv;
-
+    m_bPredUseOrigNeigh = false;
     X265_CHECK(cu.m_partSize[0] == SIZE_2Nx2N, "encodeIntraInInter does not expect NxN intra\n");
     X265_CHECK(!m_slice->isIntra(), "encodeIntraInInter does not expect to be used in I slices\n");
 
@@ -1587,8 +1600,11 @@ sse_t SearchExt::estIntraPredQT(Mode &intraMode, const CUGeom& cuGeom, const uin
                 initIntraNeighbors(cu, absPartIdx, initTuDepth, true, &intraNeighbors);
                 initAdiPattern(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
 #if STELLAR_ALG_EN
-                initAdiPatternOrigNeigh(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
-                generateNeighCombineRecAndOrig(cu, cuGeom, intraNeighbors, m_param->intraSyncSize);
+                if (m_bPredUseOrigNeigh)
+                {
+                    initAdiPatternOrigNeigh(cu, cuGeom, absPartIdx, intraNeighbors, ALL_IDX);
+                    generateNeighCombineRecAndOrig(cu, cuGeom, intraNeighbors, m_param->intraSyncSize);
+                }
 #endif
                 // determine set of modes to be tested (using prediction signal only)
                 const pixel* fenc = fencYuv->getLumaAddr(absPartIdx);

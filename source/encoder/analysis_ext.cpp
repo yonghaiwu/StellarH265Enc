@@ -226,6 +226,9 @@ Mode& AnalysisExt::compressCTU(CUData& ctu, Frame& frame, const CUGeom& cuGeom, 
     }
     ProfileCUScope(ctu, totalCTUTime, totalCTUs);
 
+#if _DEBUG
+    //printf("================ CTU: %d ================\n", ctu.m_cuAddr);
+#endif
     if (m_slice->m_sliceType == I_SLICE)
     {
         x265_analysis_intra_data* intraDataCTU = m_frame->m_analysisData.intraData;
@@ -644,10 +647,29 @@ uint64_t AnalysisExt::compressIntraCU(const CUData& parentCTU, const CUGeom& cuG
                 updateModeCost(*splitPred);
 
             checkDQPForSplitPred(*splitPred, cuGeom);
+#if _DEBUG
+            //for (int i = 0; i < depth; i++)
+            //    printf("\t");
+
+            //uint64_t noSplitCost = m_modeDepth[depth].bestMode ? m_modeDepth[depth].bestMode->rdCost : UINT64_MAX;
+            //uint64_t splitCost = splitPred->rdCost;
+            //printf("%dx%d, %d, split cost %lld, no split cost %lld, select %s, cost %lld\n",
+            //    1 << cuGeom.log2CUSize, 1 << cuGeom.log2CUSize, cuGeom.absPartIdx, splitCost,
+            //    noSplitCost, splitCost < noSplitCost ? "split" : "no split", min(splitCost, noSplitCost));
+#endif
             checkBestMode(*splitPred, depth);
         }
     }
-
+#if _DEBUG
+    //else
+    //{
+    //    for (int i = 0; i < depth; i++)
+    //        printf("\t");
+    //    printf("%dx%d, %d, no split cost %lld\n",
+    //        1 << cuGeom.log2CUSize, 1 << cuGeom.log2CUSize, cuGeom.absPartIdx,
+    //        m_modeDepth[depth].bestMode ? m_modeDepth[depth].bestMode->rdCost : UINT64_MAX);
+    //}
+#endif
     if (m_param->bEnableRdRefine && depth <= m_slice->m_pps->maxCuDQPDepth)
     {
         int cuIdx = (cuGeom.childOffset - 1) / 3;
@@ -662,15 +684,15 @@ uint64_t AnalysisExt::compressIntraCU(const CUData& parentCTU, const CUGeom& cuG
             maxTUDepth = X265_MAX(maxTUDepth, md.bestMode->cu.m_tuDepth[i]);
         ctu->m_refTuDepth[cuGeom.geomRecurId] = maxTUDepth;
     }
-
-    if (m_param->bEnableIntraRdo)
+    setUseOrigNeighFlag(false);
+    if (m_param->bEnableIntraRdo && m_param->intraSyncSize == 0) // all the data is correctly generated
     {
         /* Copy best data to encData CTU and recon */
         md.bestMode->cu.copyToPic(depth);
         if (md.bestMode != &md.pred[PRED_SPLIT])
             md.bestMode->reconYuv.copyToPicYuv(*m_frame->m_reconPic, parentCTU.m_cuAddr, cuGeom.absPartIdx);
     }
-    else
+    else // need to go through reconstruction process to get final pixel and coeff to encode
     {
         md.bestMode->cu.copyToPic(depth);
         if ((1 << cuGeom.log2CUSize) == m_param->intraSyncSize)
